@@ -1,0 +1,145 @@
+object MainForm: TMainForm
+  Left = 299
+  Height = 768
+  Top = 122
+  Width = 1366
+  Caption = 'MainForm'
+  ClientHeight = 768
+  ClientWidth = 1366
+  Color = clBlack
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnKeyPress = FormKeyPress
+  LCLVersion = '2.2.6.0'
+  object Hour1: TSegmentDisplay
+    Left = 23
+    Height = 90
+    Top = 22
+    Width = 50
+    Digit = 8
+    BackgroundColor = clBlack
+    ForegroundColor = clWhite
+  end
+  object Hour2: TSegmentDisplay
+    Left = 80
+    Height = 90
+    Top = 22
+    Width = 50
+    Digit = 8
+    BackgroundColor = clBlack
+    ForegroundColor = clWhite
+  end
+  object Minute1: TSegmentDisplay
+    Left = 152
+    Height = 90
+    Top = 22
+    Width = 50
+    Digit = 8
+    BackgroundColor = clBlack
+    ForegroundColor = clWhite
+  end
+  object Minute2: TSegmentDisplay
+    Left = 208
+    Height = 90
+    Top = 22
+    Width = 50
+    Digit = 8
+    BackgroundColor = clBlack
+    ForegroundColor = clWhite
+  end
+  object CalendarDate: TLabel
+    Left = 280
+    Height = 33
+    Top = 32
+    Width = 189
+    Caption = 'CalendarDate'
+    Font.Height = -27
+    ParentColor = False
+    ParentFont = False
+  end
+  object LogList: TListBox
+    Left = 0
+    Height = 208
+    Top = 560
+    Width = 1366
+    ItemHeight = 0
+    OnKeyPress = FormKeyPress
+    TabOrder = 0
+    TopIndex = -1
+    Visible = False
+  end
+  object Conditions: TLabel
+    Left = 280
+    Height = 18
+    Top = 64
+    Width = 77
+    Caption = 'Conditions'
+    ParentColor = False
+  end
+  object Temperature: TLabel
+    Left = 280
+    Height = 18
+    Top = 87
+    Width = 92
+    Caption = 'Temperature'
+    ParentColor = False
+  end
+  object ForecastTitle: TLabel
+    Left = 16
+    Height = 18
+    Top = 120
+    Width = 95
+    Caption = 'ForecastTitle'
+    ParentColor = False
+  end
+  object ForecastTemp: TLabel
+    Left = 16
+    Height = 18
+    Top = 136
+    Width = 101
+    Caption = 'ForecastTemp'
+    ParentColor = False
+  end
+  object ForecastOutlook: TLabel
+    Left = 16
+    Height = 100
+    Top = 160
+    Width = 640
+    AutoSize = False
+    Caption = 'ForecastOutlook'
+    ParentColor = False
+    WordWrap = True
+  end
+  object Timer: TTimer
+    Interval = 60000
+    OnTimer = TimerTimer
+    Left = 1288
+    Top = 24
+  end
+  object IPCClient: TSimpleIPCClient
+    Active = True
+    ServerID = 'rootipc'
+    Left = 1288
+    Top = 80
+  end
+  object MPlayer: TProcess
+    Active = False
+    Executable = '/usr/bin/mplayer'
+    Parameters.Strings = (
+      'MediaFile'
+    )
+    Options = []
+    Priority = ppNormal
+    StartupOptions = []
+    ShowWindow = swoNone
+    WindowColumns = 0
+    WindowHeight = 0
+    WindowLeft = 0
+    WindowRows = 0
+    WindowTop = 0
+    WindowWidth = 0
+    FillAttribute = 0
+    Left = 1288
+    Top = 144
+  end
+end

@@ -1,0 +1,13 @@
+[Unit]
+Description=Root Control Daemon Service
+Documentation=https://github.com/kveroneau/CustomUI
+After=network.target
+
+[Service]
+ExecStart=/usr/local/sbin/RootDaemon
+KillMode=process
+Restart=on-failure
+RestartSec=50s
+
+[Install]
+WantedBy=multi-user.target

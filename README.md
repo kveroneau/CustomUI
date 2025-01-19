@@ -1,2 +1,6 @@
 # CustomUI
 A full-screen desktop replacement for very specific use-cases.
+
+This program will not be useable without your own personal customizations.
+
+The idea of this program is to run either ontop of your current desktop, such as the Windows desktop, or macOS Finder.  Preferrably, it should run in a Kiosk mode on a heavily customized Linux core, as I am using it as.  Why did I create such a program and not just use something which already exists, or even a full desktop?  Sometimes, you don't want to have a full desktop environment, and want something extremely simple to operate which preferrably does not require any mouse navigation.  This full-screen program only uses various hotkeys on your keyboard to perform a subset of commands, such as the playing of a DVD Title using `mplayer`, or playing some relaxing music before bed, and having a built-in timer automatically suspend the system at a specific time.  I don't know of many other programs which provide these capabilities.  It also has a nice large clock which can easily be glanced at while lying in bed for example, instead of trying to squint to read the time and date.  It also supports a local weather forcast, which is very useful during anyone's normal morning routine.
