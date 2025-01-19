@@ -23,6 +23,9 @@ type
     ForecastTitle: TLabel;
     ForecastTemp: TLabel;
     ForecastOutlook: TLabel;
+    Label1: TLabel;
+    SysMode: TLabel;
+    SleepTimer: TImage;
     IPCClient: TSimpleIPCClient;
     MPlayer: TProcess;
     AMixer: TProcess;
@@ -81,6 +84,7 @@ begin
   WindowState:=wsFullScreen;
   {$ENDIF}
   FAppMode:=amNone;
+  SysMode.Caption:='Standing By...';
   FVoiceEnabled:=False;
   UpdateClock;
   AddLog('Laptop System started.');
@@ -128,6 +132,8 @@ begin
     'm': PlayMIDI;
     'c': EnterCryosleep;
     's': StopAllMedia;
+    ' ': ToggleControl(SleepTimer);
+    'v': FVoiceEnabled:=not FVoiceEnabled;
   end;
   if (Key > #47) and (Key < #58) then
     if Key = #48 then
@@ -138,12 +144,24 @@ begin
 end;
 
 procedure TMainForm.TimerTimer(Sender: TObject);
+var
+  dt: TSystemTime;
 begin
   UpdateClock;
   if not MPlayer.Running then
     MPlayer.Active:=False;
   if not Timidity.Running then
     Timidity.Active:=False;
+  if SleepTimer.Visible then
+  begin
+    GetLocalTime(dt);
+    if (dt.Hour = 3) and (dt.Minute = 0) then
+    begin
+      SleepTimer.Visible:=False;
+      SuspendSystem;
+      Exit;
+    end;
+  end;
   if (not MPlayer.Active) and (FAppMode = amDVD) then
   begin
     Inc(FModeIndex);
@@ -153,6 +171,14 @@ begin
     PlayMIDI
   else if (not MPlayer.Active) and (FAppMode = amCryo) then
     EnterCryosleep;
+  case FAppMode of
+    amNone: SysMode.Caption:='Standing By...';
+    amDVD: SysMode.Caption:='DVD Player';
+    amMIDI: SysMode.Caption:='MIDI Music';
+    amCryo: SysMode.Caption:='CryoSleep';
+  else
+    SysMode.Caption:='Undetermined.';
+  end;
 end;
 
 function TMainForm.GetWifiState: boolean;
