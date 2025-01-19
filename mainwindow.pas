@@ -7,9 +7,11 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, ExtCtrls,
   SegmentDisplay, DateUtils, kexec, ecweather, simpleipc, process, Math,
-  uiconst;
+  uiconst, FileUtil;
 
 type
+
+  TAppMode = (amNone, amDVD, amMIDI, amCryo);
 
   { TMainForm }
 
@@ -23,6 +25,8 @@ type
     ForecastOutlook: TLabel;
     IPCClient: TSimpleIPCClient;
     MPlayer: TProcess;
+    AMixer: TProcess;
+    Timidity: TProcess;
     Temperature: TLabel;
     LogList: TListBox;
     Minute1: TSegmentDisplay;
@@ -34,7 +38,9 @@ type
     procedure TimerTimer(Sender: TObject);
   private
     FVoiceEnabled: boolean;
-    FBrightness: Integer;
+    FAppMode: TAppMode;
+    FModeIndex: Integer;
+    FMIDIList, FCryoList: TStringList;
     function GetWifiState: boolean;
     procedure SetWifiState(AValue: boolean);
   private
@@ -45,6 +51,10 @@ type
     procedure AddLog(msg: string);
     procedure SuspendSystem;
     procedure PlayDVD(titleId: string);
+    procedure SetVolume(dB: string);
+    procedure PlayMIDI;
+    procedure EnterCryosleep;
+    procedure StopAllMedia;
   public
 
   end;
@@ -53,6 +63,13 @@ var
   MainForm: TMainForm;
 
 implementation
+
+const
+  {$IFDEF DEBUG}
+  CRYOSLEEP = '/home/kveroneau/Music/Cryosleep - Zero Beat Guaranteed/';
+  {$ELSE}
+  CRYOSLEEP = '/opt/Cryosleep/';
+  {$ENDIF}
 
 {$R *.lfm}
 
@@ -63,6 +80,7 @@ begin
   {$IFNDEF DEBUG}
   WindowState:=wsFullScreen;
   {$ENDIF}
+  FAppMode:=amNone;
   FVoiceEnabled:=False;
   UpdateClock;
   AddLog('Laptop System started.');
@@ -73,11 +91,24 @@ begin
   {$IFNDEF DEBUG}
   UpdateWeather;
   {$ENDIF}
+  AddLog('Scanning MIDI Music...');
+  FMIDIList:=TStringList.Create;
+  FindAllFiles(FMIDIList, '/opt/MIDI/Bach/', '*.mid', False);
+  FindAllFiles(FMIDIList, '/opt/MIDI/Beethoven/', '*.mid', False);
+  FindAllFiles(FMIDIList, '/opt/MIDI/Mozart/', '*.mid', False);
+  AddLog(IntToStr(FMIDIList.Count)+' MIDI Files found.');
+  AddLog('Scanning CryoSleep...');
+  FCryoList:=TStringList.Create;
+  FindAllFiles(FCryoList, CRYOSLEEP, '*.mp3', False);
+  AddLog(IntToStr(FCryoList.Count)+' Cryo Files found.');
   FVoiceEnabled:=True;
 end;
 
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
+  StopAllMedia;
+  FMIDIList.Free;
+  FCryoList.Free;
   {$IFDEF DEBUG}
   IPCClient.SendStringMessage(mtDaemonExit, 'exit');
   {$ENDIF}
@@ -91,8 +122,12 @@ begin
     'l': ToggleControl(LogList);
     'w': WifiState:=not WifiState;
     'W': UpdateWeather;
-    'i': IPCClient.SendStringMessage(mtBrightness, '1000');
+    '-': IPCClient.SendStringMessage(mtBrightness, '50');
+    '+': IPCClient.SendStringMessage(mtBrightness, '4000');
     'q': SuspendSystem;
+    'm': PlayMIDI;
+    'c': EnterCryosleep;
+    's': StopAllMedia;
   end;
   if (Key > #47) and (Key < #58) then
     if Key = #48 then
@@ -105,6 +140,19 @@ end;
 procedure TMainForm.TimerTimer(Sender: TObject);
 begin
   UpdateClock;
+  if not MPlayer.Running then
+    MPlayer.Active:=False;
+  if not Timidity.Running then
+    Timidity.Active:=False;
+  if (not MPlayer.Active) and (FAppMode = amDVD) then
+  begin
+    Inc(FModeIndex);
+    PlayDVD(IntToStr(FModeIndex));
+  end
+  else if (not Timidity.Active) and (FAppMode = amMIDI) then
+    PlayMIDI
+  else if (not MPlayer.Active) and (FAppMode = amCryo) then
+    EnterCryosleep;
 end;
 
 function TMainForm.GetWifiState: boolean;
@@ -202,22 +250,92 @@ end;
 
 procedure TMainForm.SuspendSystem;
 begin
+  StopAllMedia;
   AddLog('Putting the Laptop into Power saving mode...');
   Timer.Enabled:=False;
   IPCClient.SendStringMessage(mtSuspend, 'SUSPEND');
   Sleep(10000);
   Timer.Enabled:=True;
   UpdateClock;
+  FVoiceEnabled:=False;
   UpdateWeather;
+  FVoiceEnabled:=True;
   AddLog('Welcome Back!');
 end;
 
 procedure TMainForm.PlayDVD(titleId: string);
 begin
+  if (FAppMode <> amNone) or (FAppMode <> amDVD) then
+    StopAllMedia;
   if MPlayer.Running or MPlayer.Active then
     MPlayer.Active:=False;
-  MPlayer.Parameters.Strings[0]:='dvd://'+titleId;
+  MPlayer.Parameters.Clear;
+  MPlayer.Parameters.Add('-fs');
+  MPlayer.Parameters.Add('dvd://'+titleId);
+  SetVolume('0');
   MPlayer.Active:=True;
+  FAppMode:=amDVD;
+  FModeIndex:=StrToInt(titleId);
+end;
+
+procedure TMainForm.SetVolume(dB: string);
+begin
+  AddLog('Setting volume level to '+dB+' decibles.');
+  AMixer.Parameters.Strings[4]:=dB+'dB';
+  AMixer.Active:=True;
+  AMixer.WaitOnExit;
+  AMixer.Active:=False;
+end;
+
+procedure TMainForm.PlayMIDI;
+begin
+  SetVolume('-9');
+  if FAppMode = amMIDI then
+  begin
+    Timidity.Active:=False;
+    Inc(FModeIndex);
+    if FModeIndex > FMIDIList.Count-1 then
+      FModeIndex:=0;
+  end
+  else
+  begin
+    FAppMode:=amMIDI;
+    FModeIndex:=0;
+  end;
+  FVoiceEnabled:=False;
+  Timidity.Parameters.Strings[1]:=FMIDIList.Strings[FModeIndex];
+  Timidity.Active:=True;
+end;
+
+procedure TMainForm.EnterCryosleep;
+begin
+  SetVolume('-9');
+  if FAppMode = amCryo then
+  begin
+    MPlayer.Active:=False;
+    Inc(FModeIndex);
+    if FModeIndex > FCryoList.Count-1 then
+      FModeIndex:=0;
+  end
+  else
+  begin
+    FAppMode:=amCryo;
+    FModeIndex:=0;
+  end;
+  FVoiceEnabled:=False;
+  MPlayer.Parameters.Clear;
+  MPlayer.Parameters.Add(FCryoList.Strings[FModeIndex]);
+  MPlayer.Active:=True;
+end;
+
+procedure TMainForm.StopAllMedia;
+begin
+  AddLog('Stopping all media playback...');
+  FAppMode:=amNone;
+  if MPlayer.Running or MPlayer.Active then
+    MPlayer.Active:=False;
+  if Timidity.Running or Timidity.Active then
+    Timidity.Active:=False;
 end;
 
 end.

@@ -125,7 +125,49 @@ object MainForm: TMainForm
   object MPlayer: TProcess
     Active = False
     Executable = '/usr/bin/mplayer'
+    Options = []
+    Priority = ppNormal
+    StartupOptions = []
+    ShowWindow = swoNone
+    WindowColumns = 0
+    WindowHeight = 0
+    WindowLeft = 0
+    WindowRows = 0
+    WindowTop = 0
+    WindowWidth = 0
+    FillAttribute = 0
+    Left = 1288
+    Top = 144
+  end
+  object AMixer: TProcess
+    Active = False
+    Executable = '/usr/bin/amixer'
     Parameters.Strings = (
+      '--'
+      'sset'
+      'Master'
+      'playback'
+      '-9dB'
+    )
+    Options = []
+    Priority = ppNormal
+    StartupOptions = []
+    ShowWindow = swoNone
+    WindowColumns = 0
+    WindowHeight = 0
+    WindowLeft = 0
+    WindowRows = 0
+    WindowTop = 0
+    WindowWidth = 0
+    FillAttribute = 0
+    Left = 1288
+    Top = 208
+  end
+  object Timidity: TProcess
+    Active = False
+    Executable = '/usr/bin/timidity'
+    Parameters.Strings = (
+      '-id'
       'MediaFile'
     )
     Options = []
@@ -140,6 +182,6 @@ object MainForm: TMainForm
     WindowWidth = 0
     FillAttribute = 0
     Left = 1288
-    Top = 144
+    Top = 272
   end
 end
