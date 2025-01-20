@@ -40,7 +40,7 @@ type
     procedure FormKeyPress(Sender: TObject; var Key: char);
     procedure TimerTimer(Sender: TObject);
   private
-    FVoiceEnabled: boolean;
+    FVoiceEnabled, FExternalDisplay: boolean;
     FAppMode: TAppMode;
     FModeIndex: Integer;
     FMIDIList, FCryoList: TStringList;
@@ -58,6 +58,8 @@ type
     procedure PlayMIDI;
     procedure EnterCryosleep;
     procedure StopAllMedia;
+    procedure ToggleHDMI;
+    procedure PowerOff;
   public
 
   end;
@@ -86,6 +88,7 @@ begin
   FAppMode:=amNone;
   SysMode.Caption:='Standing By...';
   FVoiceEnabled:=False;
+  FExternalDisplay:=False;
   UpdateClock;
   AddLog('Laptop System started.');
   if WifiState then
@@ -134,6 +137,11 @@ begin
     's': StopAllMedia;
     ' ': ToggleControl(SleepTimer);
     'v': FVoiceEnabled:=not FVoiceEnabled;
+    'e': Exec('/usr/bin/eject','');
+    't': ToggleHDMI;
+    'Q': PowerOff;
+    ',': SetVolume('-9');
+    '.': SetVolume('0');
   end;
   if (Key > #47) and (Key < #58) then
     if Key = #48 then
@@ -362,6 +370,34 @@ begin
     MPlayer.Active:=False;
   if Timidity.Running or Timidity.Active then
     Timidity.Active:=False;
+end;
+
+procedure TMainForm.ToggleHDMI;
+var
+  i: Integer;
+begin
+  if FExternalDisplay then
+  begin
+    Exec('/usr/bin/xrandr', '--output LVDS-1 --auto');
+    Exec('/usr/bin/xrandr', '--output HDMI-1 --off');
+    MPlayer.Environment.Clear;
+    FExternalDisplay:=False;
+  end
+  else
+  begin
+    Exec('/usr/bin/xrandr', '--output HDMI-1 --auto');
+    Exec('/usr/bin/xrandr', '--output LVDS-1 --off');
+    for i:=0 to GetEnvironmentVariableCount-1 do
+      MPlayer.Environment.Add(GetEnvironmentString(i));
+    MPlayer.Environment.Add('ALSA_CARD=1');
+    FExternalDisplay:=True;
+  end;
+end;
+
+procedure TMainForm.PowerOff;
+begin
+  IPCClient.SendStringMessage(mtPowerOff, 'POWEROFF');
+  Close;
 end;
 
 end.

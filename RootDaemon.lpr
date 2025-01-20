@@ -87,6 +87,7 @@ begin
     mtBrightness: SetBrightness(FServer.StringMessage);
     mtSuspend: Exec('/usr/bin/systemctl', 'suspend');
     mtDaemonExit: FServer.Active:=False;
+    mtPowerOff: Exec('/sbin/poweroff','');
   end;
 end;
 

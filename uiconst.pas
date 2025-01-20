@@ -14,6 +14,7 @@ const
   mtDaemonExit = 9364;
   mtBrightness = 3750;
   mtSuspend = 8362;
+  mtPowerOff = 8364;
 
 implementation
 
