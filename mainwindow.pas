@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, ExtCtrls,
   SegmentDisplay, DateUtils, kexec, ecweather, simpleipc, process, Math,
-  uiconst, FileUtil;
+  uiconst, FileUtil, fphttpclient, BaseUnix, ssockets, forecast, suncalc;
 
 type
 
@@ -23,7 +23,10 @@ type
     ForecastTitle: TLabel;
     ForecastTemp: TLabel;
     ForecastOutlook: TLabel;
+    RepeatSong: TImage;
     Label1: TLabel;
+    SongLabel: TLabel;
+    SongTitle: TLabel;
     SysMode: TLabel;
     SleepTimer: TImage;
     IPCClient: TSimpleIPCClient;
@@ -44,6 +47,7 @@ type
     FAppMode: TAppMode;
     FModeIndex: Integer;
     FMIDIList, FCryoList: TStringList;
+    FSunrise, FSunset: TDateTime;
     function GetWifiState: boolean;
     procedure SetWifiState(AValue: boolean);
   private
@@ -51,6 +55,7 @@ type
     procedure UpdateClock;
     procedure UpdateWeather;
     procedure ToggleControl(ctrl: TControl);
+    procedure SetSongTitle(ATitle: string);
     procedure AddLog(msg: string);
     procedure SuspendSystem;
     procedure PlayDVD(titleId: string);
@@ -60,6 +65,7 @@ type
     procedure StopAllMedia;
     procedure ToggleHDMI;
     procedure PowerOff;
+    procedure UpdateApp;
   public
 
   end;
@@ -85,12 +91,13 @@ begin
   {$IFNDEF DEBUG}
   WindowState:=wsFullScreen;
   {$ENDIF}
+  CalcSunriseSet(51.0486, -114.0708, -6, FSunrise, FSunset);
   FAppMode:=amNone;
   SysMode.Caption:='Standing By...';
   FVoiceEnabled:=False;
   FExternalDisplay:=False;
   UpdateClock;
-  AddLog('Laptop System started.');
+  AddLog('Laptop System v'+SYS_VER+' started.');
   if WifiState then
     AddLog('Wifi currently available!')
   else
@@ -127,21 +134,25 @@ begin
     #27: Close;
     'd': ToggleControl(CalendarDate);
     'l': ToggleControl(LogList);
+    {$IFNDEF DEBUG}
     'w': WifiState:=not WifiState;
-    'W': UpdateWeather;
+    'q': SuspendSystem;
+    'Q': PowerOff;
+    't': ToggleHDMI;
+    'e': Exec('/usr/bin/eject','');
     '-': IPCClient.SendStringMessage(mtBrightness, '50');
     '+': IPCClient.SendStringMessage(mtBrightness, '4000');
-    'q': SuspendSystem;
+    {$ENDIF}
+    'W': UpdateWeather;
     'm': PlayMIDI;
     'c': EnterCryosleep;
     's': StopAllMedia;
     ' ': ToggleControl(SleepTimer);
     'v': FVoiceEnabled:=not FVoiceEnabled;
-    'e': Exec('/usr/bin/eject','');
-    't': ToggleHDMI;
-    'Q': PowerOff;
     ',': SetVolume('-9');
     '.': SetVolume('0');
+    'r': ToggleControl(RepeatSong);
+    'U': UpdateApp;
   end;
   if (Key > #47) and (Key < #58) then
     if Key = #48 then
@@ -194,8 +205,8 @@ var
   f: TextFile;
   s: string;
 begin
-  AddLog('Determine the current state of the WiFi...');
   system.Assign(f, '/sys/class/net/'+WIFI_DEV+'/operstate');
+  WriteLn('/sys/class/net/'+WIFI_DEV+'/operstate');
   Reset(f);
   ReadLn(f, s);
   system.Close(f);
@@ -251,7 +262,13 @@ begin
   if not Assigned(weather_cache) then
   begin
     AddLog('Initializing Weather Cache...');
-    weather_cache:=CalgaryWeather.Create;
+    try
+      weather_cache:=CalgaryWeather.Create;
+    except
+      AddLog('Failed to initialize the weather cache.');
+      weather_cache:=Nil;
+      Exit;
+    end;
   end;
   with weather_cache do
   begin
@@ -273,13 +290,30 @@ begin
   ctrl.Visible:=not ctrl.Visible;
 end;
 
+procedure TMainForm.SetSongTitle(ATitle: string);
+begin
+  if ATitle = 'Nil' then
+  begin
+    SongLabel.Visible:=False;
+    SongTitle.Visible:=False;
+  end
+  else
+  begin
+    SongLabel.Visible:=True;
+    SongTitle.Visible:=True;
+    SongTitle.Caption:=ATitle;
+  end;
+end;
+
 procedure TMainForm.AddLog(msg: string);
 begin
   LogList.ItemIndex:=LogList.Items.Add(DateToISO8601(Now)+' | '+msg);
   LogList.MakeCurrentVisible;
   Application.ProcessMessages;
+  {$IFNDEF DEBUG}
   if FVoiceEnabled then
     Exec('/usr/bin/espeak', '"'+msg+'"');
+  {$ENDIF}
 end;
 
 procedure TMainForm.SuspendSystem;
@@ -295,6 +329,11 @@ begin
   UpdateWeather;
   FVoiceEnabled:=True;
   AddLog('Welcome Back!');
+  CalcSunriseSet(51.0486, -114.0708, -6, FSunrise, FSunset);
+  if DateTimeToFileDate(Now) > DateTimeToFileDate(FSunset) then
+    IPCClient.SendStringMessage(mtBrightness, '50')
+  else
+    IPCClient.SendStringMessage(mtBrightness, '4000');
 end;
 
 procedure TMainForm.PlayDVD(titleId: string);
@@ -327,7 +366,8 @@ begin
   if FAppMode = amMIDI then
   begin
     Timidity.Active:=False;
-    Inc(FModeIndex);
+    if not RepeatSong.Visible then
+      Inc(FModeIndex);
     if FModeIndex > FMIDIList.Count-1 then
       FModeIndex:=0;
   end
@@ -339,6 +379,7 @@ begin
   FVoiceEnabled:=False;
   Timidity.Parameters.Strings[1]:=FMIDIList.Strings[FModeIndex];
   Timidity.Active:=True;
+  SetSongTitle(ExtractFileName(FMIDIList.Strings[FModeIndex]));
 end;
 
 procedure TMainForm.EnterCryosleep;
@@ -347,7 +388,8 @@ begin
   if FAppMode = amCryo then
   begin
     MPlayer.Active:=False;
-    Inc(FModeIndex);
+    if not RepeatSong.Visible then
+      Inc(FModeIndex);
     if FModeIndex > FCryoList.Count-1 then
       FModeIndex:=0;
   end
@@ -360,6 +402,7 @@ begin
   MPlayer.Parameters.Clear;
   MPlayer.Parameters.Add(FCryoList.Strings[FModeIndex]);
   MPlayer.Active:=True;
+  SetSongTitle(ExtractFileName(FCryoList.Strings[FModeIndex]));
 end;
 
 procedure TMainForm.StopAllMedia;
@@ -370,6 +413,7 @@ begin
     MPlayer.Active:=False;
   if Timidity.Running or Timidity.Active then
     Timidity.Active:=False;
+  SetSongTitle('Nil');
 end;
 
 procedure TMainForm.ToggleHDMI;
@@ -398,6 +442,45 @@ procedure TMainForm.PowerOff;
 begin
   IPCClient.SendStringMessage(mtPowerOff, 'POWEROFF');
   Close;
+end;
+
+procedure TMainForm.UpdateApp;
+var
+  f: TMemoryStream;
+  r: Integer;
+begin
+  if not WifiState then
+  begin
+    AddLog('Wifi not enabled, cannot update without connection.');
+    Exit;
+  end;
+  AddLog('Attempting to Update the system...');
+  with TFPHTTPClient.Create(Nil) do
+    try
+      f:=TMemoryStream.Create;
+      try
+        Get(UPDATE_URL, f);
+      except
+        On ESocketError do
+        begin
+          AddLog('Update failed, socket error.');
+          Exit;
+        end;
+      end;
+      f.SaveToFile(GetEnvironmentVariable('HOME')+'/LaptopSystem');
+      FpChmod(GetEnvironmentVariable('HOME')+'/LaptopSystem', &500);
+      AddLog('Download complete, attempting to start.');
+      Hide;
+      Application.ProcessMessages;
+      r:=Exec(GetEnvironmentVariable('HOME')+'/LaptopSystem', '');
+      Show;
+      Application.ProcessMessages;
+      FVoiceEnabled:=True;
+      AddLog('Welcome back to the original application.');
+    finally
+      f.Free;
+      Free;
+    end;
 end;
 
 end.
